@@ -3,9 +3,23 @@ import os
 
 import bibtexparser
 import datetime
-import string
+import re
 
 NOW = datetime.datetime.now().strftime('%Y-%m-%d')
+
+CHINESE_SURNAME = [  # 仅部分姓氏，手动维护比较困难
+    "Li", "Lee", "Ao", "Lyu", "Wang", "Zhang", "Liu", "Chen", "Yang", "Huang", "Zhao", "Wu", "Zhou",
+    "Xu", "Xuan", "Sun", "Ma", "Zhu", "Hu", "Guo", "He", "Gao", "Lin", "Luo", "Zheng",
+    "Liang", "Xie", "Song", "Tang", "Xu", "Deng", "Han", "Feng", "Cao", "Peng",
+    "Pan", "Tian", "Dong", "Yuan", "Cai", "Fu", "Lu", "Liao", "Shen", "Zeng", "Lei",
+    "Sheng", "Xiao", "Zhong", "Qin", "Jiang", "Du", 'Duan', "Kong", "Yan", "Pei",
+    "Gong", "Mo", "Cui", "Zhuang", "Bai", "Hao", "Lai", "Tan", "Hao", "Shi",
+    "Mi", "Qiu", "Hou", "Yin", "Chang", "Ou", "An", "Xiang", "Jin", "Wei", "Tao",
+    "Long", "Mao", "Wan", "Ding", "Ren", "Yu", "Yao", "Shangguan", "Ouyang",
+    "Sima", "Zhuge", "Huangfu", "Murong", "Gongsun", "Nie", "Ni", "Fan", "Gui", "Shao", "Wen",
+    "Xiong", "Jing", "Xing", "Tu", "Jiao", "Sui", "Ruan", "Cheng", "Niu", "Lou", "Ran", "Zang",
+    "Dai",
+]
 
 BOOK_TYPE = {'article': 'J',
              'book': 'M',
@@ -63,14 +77,35 @@ class BibParser:
                 self.url = ''
 
         self.year = bib_entries['year'] + ','
-        self.authors = bib_entries['author'].split('and')
-        self.authors = [author.strip().upper() for author in self.authors]
+
+        self.authors = [author.strip() for author in re.split(r'\band\b', bib_entries['author'])]  # and 的全词匹配
+        self.normal_name()
+
         print(self.authors)
         self.title = bib_entries['title'] + ' '
         self.title = self.title[0].upper() + self.title[1:]
+        self.title = self.title.replace('{', '').replace('}', '')  # bib中有的标题里面有特殊大写会用 {} 括起来
         self.ID = bib_entries['ID']
         self.doi = bib_entries['doi'] + '. ' if 'doi' in bib_entries else ''
         self.pages = bib_entries['pages'] if 'pages' in bib_entries else ''
+
+    def normal_name(self):
+        normal_authors = []
+        for author_name in self.authors:
+            if ',' in author_name:  # 有逗号的话前面是姓
+                surname = author_name.split(',')[0].upper().strip()  # 姓氏要求全部大写
+                g_name = author_name.split(',')[1].lower().strip()  # 名暂时全部小写，后面处理
+            else:  # 没有逗号的话后面是姓
+                surname = ' '.join(author_name.strip().split(' ')[1:]).upper().replace('.', '')  # 姓氏要求全部大写，有可能存在中间名，也提成姓，去掉姓的 '.'
+                g_name = author_name.strip().split(' ')[0].lower()  # 名暂时全部小写，后面处理
+            if surname.lower().capitalize() in CHINESE_SURNAME:  # 如果是中文姓氏，名完整保留，首字母大写
+                g_name = g_name.capitalize()
+            else:  # 非中文姓氏
+                g_name = [name.replace('.', '').capitalize() for name in g_name.split(' ')]  # 去掉 ".", 首字母大写
+                g_name = " ".join([name[0] for name in g_name])  # 仅保留首字母
+            full_name = surname + ' ' + g_name
+            normal_authors.append(full_name)
+        self.authors = normal_authors
 
     def get_gbt7714(self) -> str:
         """
